@@ -1,0 +1,324 @@
+repeat count .select [] [pu setpos map [4*?-500] arraytolist item repcount .select [] pd ELLIPSE 2 2]
+
+
+to mse :a :b :xy
+localmake "sum 0
+repeat count :xy [
+localmake "dot arraytolist item repcount :xy
+make "sum :sum+power (:a*first :dot)+:b-last :dot 2
+]
+op :sum/count :xy
+end
+
+to gradf :step :a :b :xy :n
+(pr :a :b mse :a :b :xy)
+wait 100
+localmake "sum_a 0
+localmake "sum_b 0
+repeat count :xy [localmake "dot arraytolist item repcount :xy
+make "sum_a :sum_a+2*:a*(power first :dot 2)+(2*:b*first :dot)-2*(first :dot)*last :dot
+make "sum_b :sum_b+(2*:a*first :dot)+2*:b-2*last :dot
+]
+setxy :n 100*sqrt (power :step*:sum_a/count :xy 2)+(power :step*:sum_b/count :xy 2)
+gradf :step :a-:step*:sum_a/count :xy :b-:step*:sum_b/count :xy :xy :n+1
+end
+
+
+to kcv :n :k :a :b :xy :mse
+if :k<:n [op :mse/:k]
+localmake "_xy1 []
+localmake "_xy2 []
+repeat count :xy [
+ifelse and repcount>(:n-1)*(count :xy)/:k repcount<:n*(count :xy)/:k+1 [
+queue "_xy2 item repcount :xy
+][
+queue "_xy1 item repcount :xy
+]]
+localmake "_ab gradf 0.0001 :a :b listtoarray :_xy1 1
+op kcv :n+1 :k :a :b :xy :mse+mse first :_ab last :_ab listtoarray :_xy2
+end
+
+
+;多元情况
+to mse :abvector :xy
+localmake "sum 0
+repeat count :xy [
+localmake "vector arraytolist item repcount :xy
+make "sum :sum+power (apply "sum  (map [?1 * ?2] bl :abvector bl :vector)) + (last :abvector)  - (last :vector) 2
+]
+op :sum/count :xy
+end
+
+to gradf :step :abvector :xy :n
+if :n>100 [(pr :abvector mse :abvector :xy) stop]
+repeat count :abvector [make word "sum_ repcount 0]
+repeat count :xy [localmake "vector arraytolist item repcount :xy
+repeat count bl :vector [
+make word "sum_ repcount (thing word "sum_ repcount) + ((apply "sum  (map [?1 * ?2] bl :abvector bl :vector)) + (last :abvector)  - (last :vector))*2*item repcount :vector
+]
+make word "sum_ count :abvector (thing word "sum_ count :abvector) + ((apply "sum  (map [?1 * ?2] bl :abvector bl :vector)) + (last :abvector)  - (last :vector))*2
+]
+gradf :step se map [?-:step*(thing word "sum_ #)/count :xy] bl :abvector (last :abvector)-:step*(thing word "sum_ count :abvector)/count :xy :xy :n+1
+end
+
+to kcv :n :k :abvector :xy :mse
+if :k<:n [op :mse/:k]
+localmake "_xy1 []
+localmake "_xy2 []
+repeat count :xy [
+ifelse and repcount>(:n-1)*(count :xy)/:k repcount<:n*(count :xy)/:k+1 [
+queue "_xy2 item repcount :xy
+][
+queue "_xy1 item repcount :xy
+]]
+localmake "_ab gradf 0.000001 :abvector listtoarray :_xy1 1
+op kcv :n+1 :k :abvector :xy :mse+mse :_ab listtoarray :_xy2
+end
+
+;归一化
+to normal :xy
+localmake "normal :xy
+repeat (count item 1 :xy)-1 [
+localmake "asa_j repcount
+localmake "asa []
+repeat count :xy [
+queue "asa mditem se repcount :asa_j :xy
+]
+localmake "asa_max $max :asa
+localmake "asa_min $min :asa
+repeat count :asa [$aset :normal se repcount-1 :asa_j-1 ((item repcount :asa)-:asa_min)/(:asa_max-:asa_min)]
+]
+op :normal 
+end
+
+
+;81.5115229652116=>33.3138
+
+
+to r2 :abvector :xy
+localmake "sum 0
+localmake "sum2 0
+repeat count :xy [
+localmake "vector arraytolist item repcount :xy
+make "sum2 :sum2+power (apply "sum  (map [?1 * ?2] bl :abvector bl :vector)) + (last :abvector) 2
+make "sum :sum+power (apply "sum  (map [?1 * ?2] bl :abvector bl :vector)) + (last :abvector)  - (last :vector) 2
+]
+op (:sum2-:sum)/:sum2
+end
+
+;神经网络
+to sigmoid :x
+op 1/(1+exp -:x)
+end
+
+to neural :abvector :vector
+op sigmoid ((apply "sum  (map [?1 * ?2] bl :abvector :vector)) + (last :abvector))
+end
+
+to network :abvector :xy :xy2 :label
+if empty? :abvector [if not empty? :label [make "hh :hh + apply "sum (map [power (?1 - ?2) 2] :xy :label)] op :xy2]
+localmake "_xy []
+repeat count first :abvector [
+queue "_xy neural item repcount first :abvector :xy
+]
+op network bf :abvector :_xy lput :_xy :xy2 :label
+end
+
+to abvector :layer
+if empty? bl :layer [op []]
+localmake "sum1 []
+localmake "ji (count last :layer)*(count last bl :layer)
+make "ji rseq (0 - power :ji -0.5) (power :ji -0.5) 10000
+repeat last :layer [
+localmake "sum0 []
+repeat 1+last bl :layer [
+queue "sum0 pick :ji]
+queue "sum1 :sum0
+]
+op se abvector bl :layer (list :sum1)
+end
+
+;三层简单神经网络，随机梯度下降的反向传播
+to backpro :abvector :abvector2 :xy :label
+;输出层
+repeat count :label [
+localmake "_abvector2 []
+localmake "_grada 2*((item repcount last :xy)-(item repcount :label))*(item repcount last :xy)*(1-item repcount last :xy)
+repeat count first bf :xy [
+localmake "_gradab :_grada*(item repcount first bf :xy)
+queue "_abvector2 :_gradab
+]
+queue "_abvector2 :_grada
+queue "abvector2 :_abvector2
+]
+;隐藏层
+localmake "_abvector3 []
+repeat count first bf :xy [
+localmake "_i repcount
+localmake "_gradb []
+repeat count :label [
+queue "_gradb (last item repcount :abvector2)*(item :_i item repcount last :abvector)*(item :_i first bf :xy)*(1-item :_i first bf :xy)
+]
+make "_gradb apply "sum :_gradb
+localmake "_abvector2 []
+repeat count first :xy [
+queue "_abvector2 :_gradb*(item repcount first :xy)
+]
+queue "_abvector2 :_gradb
+queue "_abvector3 :_abvector2
+]
+make "abvector2 list :_abvector3 :abvector2 
+;更新网络
+localmake "abvector3 []
+repeat 2 [
+localmake "i repcount
+localmake "i2 []
+repeat count item :i :abvector [
+queue "i2 (map [?1-0.0001*?2/count :label] item repcount item :i :abvector item repcount item :i :abvector2)
+]
+queue "abvector3 :i2
+]
+op :abvector3
+end
+
+chdir "hair_res
+openread "mnist_train.txt
+setread "mnist_train.txt
+
+to mnist :abvector :n
+if eof? [pr :abvector stop]
+pr :n
+localmake "wa ._readcsv readlist
+localmake "xy bl :wa
+localmake "label []
+repeat 10 [ifelse repcount = (1 + last :wa) [queue "label 1][queue "label 0]]
+mnist backpro :abvector [] fput :xy network :abvector :xy [] :label :label :n+1
+end
+
+to ._readcsv :list
+localmake "_csv [] localmake "_w "
+foreach first :list [
+ifelse ?=", [queue "_csv :_w make "_w "] [make "_w word :_w ?]
+]
+queue "_csv :_w
+op :_csv
+end
+
+openread "mnist_test.txt
+setread "mnist_test.txt
+
+to acc :abvector :n
+if eof? [pr :n/100 stop]
+localmake "wa ._readcsv readlist
+localmake "xy map [?/255] bl :wa
+if (last :wa) = (max last network :abvector :xy [] [] 0 0 1)-1 [make "n :n+1]
+acc :abvector :n
+end
+
+to max :l :n :i :m
+if empty? :l [op :i]
+if :n < first :l [make "n first :l make "i :m]
+op max bf :l :n :i :m+1
+end
+
+;随机梯度效果不好，重写为小批量梯度下降
+to backpro :abvector :abvector2 :xy :label
+;输出层
+repeat count :label [
+localmake "_abvector2 []
+localmake "_grada 2*((item repcount last :xy)-(item repcount :label))*(item repcount last :xy)*(1-item repcount last :xy)
+repeat count first bf :xy [
+localmake "_gradab :_grada*(item repcount first bf :xy)
+queue "_abvector2 :_gradab
+]
+queue "_abvector2 :_grada
+queue "abvector2 :_abvector2
+]
+;隐藏层
+localmake "_abvector3 []
+repeat count first bf :xy [
+localmake "_i repcount
+localmake "_gradb []
+repeat count :label [
+queue "_gradb (last item repcount :abvector2)*(item :_i item repcount last :abvector)*(item :_i first bf :xy)*(1-item :_i first bf :xy)
+]
+make "_gradb apply "sum :_gradb
+localmake "_abvector2 []
+repeat count first :xy [
+queue "_abvector2 :_gradb*(item repcount first :xy)
+]
+queue "_abvector2 :_gradb
+queue "_abvector3 :_abvector2
+]
+make "abvector2 list :_abvector3 :abvector2 
+op :abvector2
+end
+
+to mnist :data :abvector :n
+if :n>1000 [pr :abvector stop]
+localmake "_data 100
+localmake "_label 10
+pr :n
+make "abvector3 []
+make "hh 0
+repeat :_data [
+localmake "wa arraytolist item repcount+:_data*(:n-1) :data
+localmake "xy map [?/255] bl :wa
+localmake "label []
+repeat 10 [ifelse repcount = (1 + last :wa) [queue "label 1][queue "label 0]]
+queue "abvector3 backpro :abvector [] fput :xy network :abvector :xy [] :label :label
+]
+pr :hh/:_data/:_label
+;更新网络
+make "abvector4 []
+repeat 2 [
+localmake "i repcount
+localmake "i2 []
+repeat count item :i :abvector [
+localmake "i3 item repcount item :i :abvector
+foreach :abvector3 [
+make "i3 (map [?1-0.8*?2/:_label/:_data] :i3 item repcount item :i ?)
+]
+queue "i2 :i3
+]
+queue "abvector4 :i2
+]
+mnist :data :abvector4 :n+1
+end
+
+
+;强化学习
+to greedy :state :qtable
+ifelse 8 < random 10 [op random 2][ifelse (first item :state :qtable)>=(last item :state :qtable) [op 0] [op 1]]
+end
+
+to env :state :action
+ifelse :action=0 [
+ifelse :state=1 [op [1 0]] [op se :state-1 0]
+] [
+ifelse :state=5 [op [6 1]] [op se :state+1 0]
+]
+end
+
+to qtable :x :y :n
+ifelse :y=0 [localmake "dfsdf se (:n+first item :x :q) last item :x :q] [localmake "dfsdf se first item :x :q (:n+last item :x :q)]
+make "q (se $getitem :x-1 :q (list :dfsdf) $delitem :x :q)
+end
+
+to rll 
+pd
+make "q [[5 2][5 4][1 7][9 3][4 1][4 8]]
+repeat 6 [circle 20 pu setx xcor+45 pd]
+pu
+repeat 12 [
+make "state 1
+while [:state<>6] [
+setx (:state-1)*45 wait 10
+localmake "aw greedy :state :q
+localmake "wa env :state :aw
+qtable :state :aw 0.1 * ((last :wa)+0.9*($max item first :wa :q)-item :aw+1 item :state :q)
+make "state first :wa
+]
+]
+pd
+end
