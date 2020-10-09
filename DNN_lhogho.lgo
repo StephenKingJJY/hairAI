@@ -1,0 +1,185 @@
+load "Hair.lgo
+load "euler.lgo
+
+;之前的神经网络部分
+to sigmoid :x
+op 1/(1+exp -:x)
+end
+
+to map :l1 :l2
+if empty? :l1 [op []]
+op fput (first :l1)*(first :l2) map bf :l1 bf :l2
+end
+
+to neural :abvector :vector
+op sigmoid ((sumlist (map bl :abvector :vector)) + (last :abvector))
+end
+
+to network :abvector :xy :xy2 
+if empty? :abvector [op reverse :xy2]
+local "_xy
+make "_xy []
+repeat count first :abvector [
+make "_xy fput neural item repcount first :abvector :xy :_xy
+]
+make "_xy reverse :_xy
+op network bf :abvector :_xy fput :_xy :xy2
+end
+
+to abvector :layer
+if empty? bl :layer [op []]
+local "sum1
+make "sum1 []
+local "ji
+make "ji (count last :layer)*(count last bl :layer)
+make "ji rseq (0 - power :ji -0.5) (power :ji -0.5) 10000
+repeat last :layer [
+local "sum0
+make "sum0 []
+repeat 1+last bl :layer [
+make "sum0 lput pick :ji :sum0]
+make "sum1 lput :sum0 :sum1
+]
+op se abvector bl :layer (list :sum1)
+end
+;神经网络结束
+
+;随机梯度效果不好，重写为小批量梯度下降
+to backpro :abvector :abvector2 :xy :label
+;输出层
+repeat count :label [
+local "_abvector2
+make "_abvector2 []
+local "_grada
+make "_grada 2*((item repcount last :xy)-(item repcount :label))*(item repcount last :xy)*(1-item repcount last :xy)
+repeat count first bf :xy [
+local "_gradab
+make "_gradab :_grada*(item repcount first bf :xy)
+make "_abvector2 fput :_gradab :_abvector2
+]
+make "_abvector2 fput :_grada :_abvector2
+make "_abvector2 reverse :_abvector2 
+make "abvector2 fput :_abvector2 :abvector2
+]
+make "abvector2 reverse :abvector2 
+;隐藏层
+local "_abvector3
+make "_abvector3 []
+repeat count first bf :xy [
+local "_i
+make "_i repcount
+local "_gradb
+make "_gradb []
+repeat count :label [
+make "_gradb fput (last item repcount :abvector2)*(item :_i item repcount last :abvector)*(item :_i first bf :xy)*(1-item :_i first bf :xy) :_gradb
+]
+make "_gradb sumlist :_gradb
+;local "_abvector2
+make "_abvector2 []
+repeat count first :xy [
+make "_abvector2 fput :_gradb*(item repcount first :xy) :_abvector2
+]
+make "_abvector2 fput :_gradb :_abvector2
+make "_abvector2 reverse :_abvector2
+make "_abvector3 fput :_abvector2 :_abvector3
+]
+make "_abvector3 reverse :_abvector3
+make "abvector2 list :_abvector3 :abvector2 
+op :abvector2
+end
+to map2 :l
+if empty? :l [op []]
+op fput (first :l)/255 map2 bf :l
+end
+to mnist :abvector :n
+if :n>50 [make "_can :abvector stop]
+type  "#
+make "abvector3 []
+repeat 100 [
+make "abvector3 fput backpro :abvector [] fput (item (:n-1)*100+repcount :xy2) network :abvector (item (:n-1)*100+repcount :xy2) [] (item (:n-1)*100+repcount :label2) :abvector3
+]
+make "abvector3n count :abvector3
+;更新网络
+make "abvector4 []
+repeat 2 [
+local "i
+make "i repcount
+local "i2
+make "i2 []
+repeat count item :i :abvector [
+(local "i3 "i4)
+make "i4 repcount
+make "i3 item :i4 item :i :abvector
+repeat :abvector3n [
+make "i3 map3 :i3 item :i4 item :i item :abvector3n-repcount+1 :abvector3 1000
+]
+make "i2 fput :i3 :i2
+]
+make "i2 reverse :i2
+make "abvector4 fput :i2 :abvector4
+]
+mnist reverse :abvector4 :n+1
+end
+
+to map3 :m :n :k
+if empty? :m [op []]
+op fput (first :m)-0.8*(first :n)/:k map3 bf :m bf :n :k
+end
+
+to acc :abvector :n :i
+if or eof? :i>99 [pr word :n "% stop]
+local "wa
+make "wa readlist
+local "xy
+make "xy map2 bl :wa
+if (last :wa) = (max last network :abvector :xy [] 0 0 1)-1 [make "n :n+1]
+acc :abvector :n :i+1
+end
+
+to max :l :n :i :m
+if empty? :l [op :i]
+if :n < first :l [make "n first :l make "i :m]
+op max bf :l :n :i :m+1
+end
+
+make "_can abvector [784 15 10]
+
+openread "mnist_test.htab openread "mnist.htab
+setread "mnist_test.htab
+type "baseline\ acc:
+acc :_can 0 0
+
+setread "mnist.htab
+make "wa2 []
+repeat 5000 [make "wa2 fput readlist :wa2]
+closeall
+
+make "xy2 []
+make "label2 []
+repeat 5000 [
+make "wa item repcount :wa2
+make "xy2 fput map2 bl :wa :xy2
+make "label []
+make "i 0
+while [:i<last :wa] [make "label fput 0 :label make "i :i+1] 
+make "label fput 1 :label 
+make "i 0
+while [:i<9-last :wa] [make "label fput 0 :label make "i :i+1]
+make "label2 fput :label :label2
+]
+make "xy2 reverse :xy2
+make "label2 reverse :label2
+
+repeat 20 [
+(type "epoch repcount ":\[)
+
+make "hhhht hair.base.timemilli
+mnist :_can 1
+type "\]
+(pr [] [train cost:] hair.base.timemilli-:hhhht [ms.])
+
+openread "mnist_test.htab
+setread "mnist_test.htab
+acc :_can 0 0
+closeall
+]
