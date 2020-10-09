@@ -1,0 +1,168 @@
+load "Hair.lgo
+load "euler.lgo
+
+;之前的神经网络部分
+to sigmoid :x
+op 1/(1+exp -:x)
+end
+
+to map :l1 :l2
+if empty? :l1 [op []]
+op fput (first :l1)*(first :l2) map bf :l1 bf :l2
+end
+
+to neural :abvector :vector
+op sigmoid ((sumlist (map bl :abvector :vector)) + (last :abvector))
+end
+
+to network :abvector :xy :xy2 
+if empty? :abvector [op reverse :xy2]
+local "_xy
+make "_xy []
+repeat count first :abvector [
+make "_xy fput neural item repcount first :abvector :xy :_xy
+]
+make "_xy reverse :_xy
+op network bf :abvector :_xy fput :_xy :xy2
+end
+
+to abvector :layer
+if empty? bl :layer [op []]
+local "sum1
+make "sum1 []
+local "ji
+make "ji (count last :layer)*(count last bl :layer)
+make "ji rseq (0 - power :ji -0.5) (power :ji -0.5) 10000
+repeat last :layer [
+local "sum0
+make "sum0 []
+repeat 1+last bl :layer [
+make "sum0 lput pick :ji :sum0]
+make "sum1 lput :sum0 :sum1
+]
+op se abvector bl :layer (list :sum1)
+end
+;神经网络结束
+
+to map2 :l
+if empty? :l [op []]
+op fput (first :l)/255 map2 bf :l
+end
+
+;卷积残差神经网络的logo实现
+;以9*9五子棋AI为例
+;输入为9*9*7（前后三步加当前走子方）
+;使用3*3*7的16个卷积核
+;一共进行1+12+1次卷积，一次全连接
+;最后输出棋盘上走子的概率，以及当前局面的胜率
+;全局卷积核权重参数blocklist[13 16]、权重参数blist[13 16]、全连接权重参数表alist
+cnn hair.old.array [9 9 7] 1
+
+to cnn :gobang_board
+;初始化权重参数
+;make "blocklist hair.old.array [13 16] hair.old.array [9 9 16] 1
+make "blocklist hair.old.array [9 9 16] 1
+make "blist hair.old.array [13 16] 0
+make "alist abvector se 9*9*16 1
+make "t hair.base.timemilli
+;0
+make "gobang_board layer dataempty :gobang_board 7 hair.old.array [11 11 7] [] 7 16 hair.old.array [9 9 16] [] 0
+pr 1
+;1-12
+repeat 3 [
+    make "gobang_board2 :gobang_board
+    make "_rep repcount
+    repeat 4 [make "gobang_board2 layer dataempty :gobang_board2 16 hair.old.array [11 11 16] [] 16 16 hair.old.array [9 9 16] [] (:_rep-1)*3+repcount]
+    make "gobang_board dataadd :gobang_board :gobang_board2 16 hair.old.array [9 9 16] []
+]
+;13/14
+make "gobang_board2 []
+for "o [0 8] [
+    for "p [0 8] [
+        for "q [0 15] [
+            make "gobang_board2 fput hair.old.aget :gobang_board (se :o :p :q) :gobang_board2
+        ]
+    ]
+]
+make "gobang_board2 reverse :gobang_board2
+pr network :alist :gobang_board2 [] 
+pr layer dataempty :gobang_board 16 hair.old.array [11 11 16] [] 16 1 hair.old.array [9 9 1] [] 13
+pr hair.base.timemilli-:t
+end
+
+;计算一次卷积
+;data被卷积的数据3*3*16
+;n告诉系统深度是16还是7
+;block卷积核的各个权重
+;b偏置
+to convolution :data :block :b :n
+pr :block
+local "_data
+make "_data 0
+make "_nm :n-1
+for "i [0 2] [
+    for "j [0 2] [
+        for "k [0 :_nm] [
+            make "_data :_data + (hair.old.aget :data (se :i :j :k))*(hair.old.aget :block (se :i :j :k))
+        ]
+    ]
+]
+op :_data+:b
+end
+
+;计算一层卷积
+;需要提前给data数据周围增加一圈空值
+;n表示数据的深度
+;_n表示几个卷积核，在第一层、最后一层深度与核数不等，其余是相等的
+to layer :data :n :_n :result :layerid
+if :_n<1 [op :result]
+make "_nm :n-1
+for "o [0 8] [
+    for "p [0 8] [
+        make "wa hair.old.array se [3 3] :n []
+        for "q [0 :_nm] [
+            repeat 3 [
+                    make "wa hair.old.aset :wa (se repcount-1 0 :q) hair.old.aget :data (se :o+repcount-1 :p :q)
+                    make "wa hair.old.aset :wa (se repcount-1 1 :q) hair.old.aget :data (se :o+repcount-1 :p+1 :q)
+                    make "wa hair.old.aset :wa (se repcount-1 2 :q) hair.old.aget :data (se :o+repcount-1 :p+2 :q)]
+            
+        ]
+        pr :blocklist
+        ;make "result hair.old.aset :result (se :o :p :_n-1) convolution :wa hair.old.aget :blocklist se :layerid :_n-1 hair.old.aget :blist se :layerid :_n-1 :n
+        make "result hair.old.aset :result (se :o :p :_n-1) convolution :wa :blocklist hair.old.aget :blist se :layerid :_n-1 :n
+    ]
+]
+op layer :data :n :_n-1 :result :layerid
+end
+
+;为data周围加空值
+to dataempty :data :n :result
+for "o [0 10] [
+    for "p [0 10] [
+        make "n2 :n-1
+        for "q [0 :n2] [
+            ifelse (or :o=0 :p=0 :o=10 :p=10) [
+                make "result hair.old.aset :result (se :o :p :q) 0
+            ][
+                make "result hair.old.aset :result (se :o :p :q) hair.old.aget :data (se :o-1 :p-1 :q)
+            ]
+        ]
+    ]
+]
+op :result
+end
+
+;将两个数组相加
+;用于将卷积结果和残差合并
+to dataadd :data1 :data2 :n :result
+make "n2 :n-1
+for "o [0 8] [
+    for "p [0 8] [
+        for "q [0 :n2] [
+            make "result hair.old.aset "result (se :o :p :q) (hair.old.aget :data1 (se :o :p :q))+(hair.old.aget :data2 (se :o :p :q))
+        ]
+    ]
+]
+op :result
+end
+
