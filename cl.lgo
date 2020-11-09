@@ -1,0 +1,122 @@
+make "cl libload "openCL.dll
+make "blas libload "clBLAS.dll
+make "clblas libload "Dll1.dll
+
+to clGetPlatformIDs :x1 :x2 :x3
+end
+to clGetDeviceIDs :x1 :x2 :x3 :x4 :x5
+end
+to clCreateContext :x1 :x2 :x3 :x4 :x5 :x6
+end
+to clCreateCommandQueueWithProperties :x1 :x2 :x3 :x4
+end
+to clblasSetup
+end
+to hair_cl_sigmoid_source :x1 :x2 :x3 :x4
+end
+to hair_cl__back_source :x1 :x2 :x3
+end
+to hair_cl_vecdot_source :x1 :x2 :x3
+end
+to hair_cl_buffer :x1 :x2 :x3 :x4 :x5 :x6
+end
+to hair_cl_readbuffer :x1 :x2 :x3 :x4
+end
+to hair_cl_vecadd :x1 :x2 :x3 :x4 :x5
+end
+to hair_cl_matmul :x1 :x2 :x3 :x4 :x5 :x6 :x7 :x8 :x9 :x10 :x11
+end
+to hair_cl_sigmoid :x1 :x2 :x3 :x4
+end
+to hair_cl_scal :x1 :x2 :x3 :x4
+end
+to hair_cl_copy :x1 :x2 :x3 :x4
+end
+to hair_cl__back :x1 :x2 :x3 :x4 :x5 :x6 :x7
+end
+to hair_cl_vecdot :x1 :x2 :x3 :x4 :x5 :x6 
+end
+
+external "clGetPlatformIDs [v0 clGetPlatformIDs i4 p4 p4] :cl
+external "clGetDeviceIDs [v0 clGetDeviceIDs p4 u8 i4 p4 p4] :cl
+external "clCreateContext [p4 clCreateContext p4 i4 p4 p4 p4 p4] :cl
+external "clCreateCommandQueueWithProperties [p4 clCreateCommandQueueWithProperties p4 p4 i4 p4] :cl
+external "clblasSetup [i4 clblasSetup] :blas
+external "hair_cl_sigmoid_source [i4 hair_cl_sigmoid_source p4 p4 p4 p4] :clblas
+external "hair_cl__back_source [i4 hair_cl__back_source p4 p4 p4] :clblas
+external "hair_cl_vecdot_source [i4 hair_cl_vecdot_source p4 p4 p4] :clblas
+external "hair_cl_buffer [v0 hair_cl_buffer p4 p4 p4 p4 i4 u4] :clblas
+external "hair_cl_readbuffer [v0 hair_cl_readbuffer p4 p4 p4 u4] :clblas
+external "hair_cl_vecadd [v0 hair_cl_vecadd p4 p4 p4 f4 u4] :clblas
+external "hair_cl_matmul [i4 hair_cl_matmul p4 p4 p4 p4 f4 f4 u4 u4 u4 i4 i4] :clblas
+external "hair_cl_sigmoid [v0 hair_cl_sigmoid p4 p4 p4 u4] :clblas
+external "hair_cl_scal [v0 hair_cl_scal p4 p4 f4 u4] :clblas
+external "hair_cl_copy [v0 hair_cl_copy p4 p4 p4 u4] :clblas
+external "hair_cl__back [v0 hair_cl__back p4 p4 p4 p4 f4 u4 u4] :clblas
+external "hair_cl_vecdot [v0 hair_cl_vecdot p4 p4 p4 p4 f4 u4] :clblas
+
+to hair.cl.buffer :x1 :x2 :x3 :x4
+hair_cl_buffer :cmdQueue :ctx :x1 :x2 :x3 :x4
+end
+to hair.cl.readbuffer :x1 :x2 :x3
+hair_cl_readbuffer :cmdQueue :x1 :x2 :x3
+end
+to hair.cl.matmul :x1 :x2 :x3 :x4 :x5 :x6 :x7 :x8
+ignore hair_cl_matmul :cmdQueue :x1 :x2 :x3 :x4 :x5 :x6 :x7 :x8 0 0
+end
+to hair.cl.matmult1 :x1 :x2 :x3 :x4 :x5 :x6 :x7 :x8
+op hair_cl_matmul :cmdQueue :x1 :x2 :x3 :x4 :x5 :x6 :x7 :x8 1 0
+end
+to hair.cl.matmult2 :x1 :x2 :x3 :x4 :x5 :x6 :x7 :x8
+ignore hair_cl_matmul :cmdQueue :x1 :x2 :x3 :x4 :x5 :x6 :x7 :x8 0 1
+end
+to hair.cl.sigmoid :x1 :x2
+hair_cl_sigmoid :cmdQueue first blocktolist :kernel_sigmoid [p4] :x1 :x2
+end
+to hair.cl.sigmoid.d :x1 :x2
+hair_cl_sigmoid :cmdQueue first blocktolist :kernel_sigmoid_d [p4] :x1 :x2
+end
+to hair.cl.scal :x1 :x2 :x3 
+hair_cl_scal :cmdQueue :x1 :x2 :x3 
+end
+to hair.cl.copy :x1 :x2 :x3
+hair_cl_copy :cmdQueue :x1 :x2 :x3
+end
+to hair.cl.vecadd :x1 :x2 :x3 :x4 
+hair_cl_vecadd :cmdQueue :x1 :x2 :x3 :x4 
+end
+to hair.cl._back :x1 :x2 :x3 :x4 :x5
+hair_cl__back :cmdQueue first blocktolist :kernel__back [p4] :x1 :x2 :x3 :x4 :x5
+end
+to hair.cl.vecdot :x1 :x2 :x3 :x4 
+hair_cl_vecdot :cmdQueue first blocktolist :kernel_vecdot [p4] :x1 :x2 :x3 :x4 
+end
+
+make "platform listtoblock [0] [p4]
+clGetPlatformIDs 1 :platform 0
+make "device listtoblock [0] [p4]
+clGetDeviceIDs first blocktolist :platform [p4] 4 1 :device 0
+make "ctx clCreateContext 0 1 :device 0 0 0
+make "cmdQueue clCreateCommandQueueWithProperties :ctx first blocktolist :device [p4] 0 0
+make "kernel_sigmoid listtoblock [0] [p4]
+make "kernel_sigmoid_d listtoblock [0] [p4]
+make "kernel__back listtoblock [0] [p4]
+make "kernel_vecdot listtoblock [0] [p4]
+ignore hair_cl_sigmoid_source :ctx first blocktolist :device [p4] :kernel_sigmoid :kernel_sigmoid_d 
+ignore hair_cl__back_source :ctx first blocktolist :device [p4] :kernel__back
+ignore hair_cl_vecdot_source :ctx first blocktolist :device [p4] :kernel_vecdot
+ignore clblasSetup
+
+;make "ppp1 listtoblock [3 9 8 3 9 8 3 9 8 3 9 8] [12 f4]
+;make "pp1 listtoblock [0] [p4] 
+;make "ppp2 listtoblock [9 8 5 3 1 7 6 4 0 1 3 2 6 2 3] [15 f4]
+;make "pp2 listtoblock [0] [p4] 
+;make "ppp3 listtoblock [9 8 5 3 1 7 6 4 0 1 3 2 6 2 3 0 0 0 0 0] [20 f4]
+;make "pp3 listtoblock [0] [p4] 
+;hair.cl.buffer :pp1 :ppp1 1 12
+;hair.cl.buffer :pp2 :ppp2 1 15
+;hair.cl.buffer :pp3 :ppp3 1 20
+;hair.cl.sigmoid :pp3 20
+;hair.cl.readbuffer :pp3 :ppp3 20
+;pr blocktolist :ppp3 [20 f4]
+;stop

@@ -1,0 +1,287 @@
+;Hair_v2.2.0.20200909_package
+;build time: Fri Oct 09 11:36:15 2020
+;target os: lhogho
+;------- fallback.lgo ---------
+to hair.fallback.osdetect
+if name? "logodialect [if :logodialect="Lhogho [op "lhogho]]
+ifelse name? "logoversion [op "ucblogo] [op "fmslogo]
+op "unknown
+end
+make "hair_fallback_os hair.fallback.osdetect
+to directories
+end
+to chdir
+end
+to popdir
+end
+to timemilli
+end
+to dllload :x
+end
+to dllcall :x
+end
+to dllfree
+end
+to filter :x :y
+end
+to sort :x
+end
+to reduce :x :y
+end
+to shell
+end
+;------- debug.lgo ---------
+to hair.debug.error :msg
+(throw "error :msg)
+end
+to hair.debug.' :a
+end
+to listbenchmark :limit
+make "start hair.base.timemilli
+make "a []
+repeat :limit [	
+  make "a fput 1000 :a
+]
+pr hair.base.timemilli-:start 
+end
+;------- base.lgo ---------
+make "_allfiles_list []
+to hair.base.allfiles
+if or :hair_fallback_os = "lhogho :hair_fallback_os = "ucblogo [(throw "error [hair.base.allfiles do not supported on your platform.])]
+make "_allfiles_list []
+hair.base.allfiles.repeat
+op :_allfiles_list
+end
+to hair.base.allfiles.repeat
+make "_allfiles_list se files :_allfiles_list
+if 2=count directories [stop]
+repeat (count directories)-2 [chdir item repcount+2 directories hair.base.allfiles.repeat popdir]
+end
+to hair.base.timemilli.repeat 
+end
+if :hair_fallback_os = "lhogho [make "hair_fallback_handle libload "Kernel32.dll]
+if :hair_fallback_os = "lhogho [external "hair.base.timemilli.repeat  [u4 GetTickCount] :hair_fallback_handle]
+if :hair_fallback_os = "lhogho [libfree :hair_fallback_handle]
+to hair.base.timemilli 
+if :hair_fallback_os = "fmslogo [op timemilli]
+if :hair_fallback_os = "ucblogo [(throw "error [hair.base.timemilli do not supported on your platform.])]
+if :hair_fallback_os = "lhogho [ifelse :logoplatform = "Windows [
+	op hair.base.timemilli.repeat
+] [openfile "time_temp.htxt "w op last filetimes "time_temp.htxt erasefile "time_temp.htxt]]
+end
+to hair.base.copyfile.repeat :1 :2
+end
+if :hair_fallback_os = "lhogho [make "hair_fallback_handle libload "Kernel32.dll]
+if :hair_fallback_os = "lhogho [external "hair.base.copyfile.repeat [v0 CopyFileA s1 s1] :hair_fallback_handle]
+if :hair_fallback_os = "lhogho [libfree :hair_fallback_handle]
+to hair.base.copyfile :n1 :n2
+if :hair_fallback_os = "ucblogo [(throw "error [hair.base.copyfile do not supported on your platform.])]
+if :hair_fallback_os = "lhogho [ifelse :logoplatform = "Windows [hair.base.copyfile.repeat :n1 :n2 stop][
+	(throw "error [hair.base.copyfile do not supported on your platform.])
+]]
+dllload "Kernel32.dll
+ignore dllcall (list "L "CopyFileA "S :n2 "S :n1)
+dllfree
+end
+to hair.base.rename :n1 :n2
+if :hair_fallback_os = "ucblogo [(throw "error [hair.base.rename do not supported on your platform.])]
+if :hair_fallback_os = "lhogho [renamefile :n1 :n2 stop]
+dllload "Kernel32.dll
+ignore dllcall (list "L "MoveFileA "S :n2 "S :n1)
+dllfree
+end
+to hair.base.whatdir
+if :hair_fallback_os = "ucblogo [(throw "error [hair.base.whatdir do not supported on your platform.])]
+if :hair_fallback_os = "lhogho [op currentfolder]
+    local [workingDirectorySize lastError workingDirectory]
+    dllload "kernel32.dll
+    ; Call it with a NULL buffer to determine the required buffer size
+    make "workingDirectorySize item 1 dllcall [L GetCurrentDirectoryA L 0 L 0]
+    ifelse :workingDirectorySize = 0 [
+        make "lastError dllcall [L GetLastError]
+    ][
+        make "workingDirectory item 2 dllcall (list "L "GetCurrentDirectoryA "B :workingDirectorySize "L :workingDirectorySize)
+    ]
+    dllfree
+    if name? "lastError [ 
+       (throw "Error (word "|Could get the working directory (error=| item 1 :lastError "|)|))
+    ]
+    ; Remove the NUL characters from the buffer
+    output filter [NotEqual? char 0 ? ] :workingDirectory
+end
+to hair.base.asc :list
+if :hair_fallback_os = "ucblogo [(throw "error [hair.base.asc do not supported on your platform.])]
+if :hair_fallback_os = "lhogho [(throw "error [hair.base.asc do not supported on your platform.])]
+op sort :list
+end
+to hair.base.desc :list
+if :hair_fallback_os = "ucblogo [(throw "error [hair.base.desc do not supported on your platform.])]
+if :hair_fallback_os = "lhogho [(throw "error [hair.base.desc do not supported on your platform.])]
+op reverse sort :list
+end
+to hair.base.merge :v1 :v2
+if and word? :v1 word? :v2 [op word :v1 :v2]
+if and list? :v1 list? :v2 [op se :v1 :v2]
+op list :v1 :v2
+end
+to hair.base.bmitem :n :v
+if (count :v) < :n [hair.debug.error [over the length.] stop]
+if (count :v) = :n [op bl :v]
+if :n=1 [op bf :v]
+local "temp1 
+make "temp1 hair.base.getitem :n-1 :v
+local "temp2 
+make "temp2 hair.base.delitem :n :v
+op hair.base.merge :temp1 :temp2
+end
+to hair.base.delitem :n :v
+if :n<0 [hair.debug.error [param wrong] stop]
+if :n > count :v [ifelse list? :v [op []] [op "]]
+if :n=0 [op :v]
+op hair.base.delitem :n-1 bf :v
+end
+to hair.base.getitem :n :v
+if :n > (count :v) [op :v]
+op hair.base.getitem.repeat (count :v) - :n :v
+end
+to hair.base.getitem.repeat :n :v
+if :n<0 [hair.debug.error [param wrong] stop]
+if :n=0 [op :v]
+op hair.base.getitem.repeat :n-1 bl :v
+end
+to hair.base.hex2rgb :hex
+if "# = first :hex [make "hex bf :hex]
+local "myrgb
+make "myrgb []
+repeat 3 [make "myrgb se :myrgb hair.base.hex2rgb.repeat hair.base.getitem 2 :hex make "hex bf bf :hex]
+op :myrgb
+end
+to hair.base.hex2rgb.repeat :hex
+local "hexfirst
+make "hexfirst first :hex
+local "hexlast
+make "hexlast last :hex
+ifelse and (ascii :hexfirst)<103 (ascii :hexfirst)>96 [make "hexfirst (ascii :hexfirst)-87][
+if and (ascii :hexfirst)<71 (ascii :hexfirst)>64 [make "hexfirst (ascii :hexfirst)-55]]
+ifelse and (ascii :hexlast)<103 (ascii :hexlast)>96 [make "hexlast (ascii :hexlast)-87][
+if and (ascii :hexlast)<71 (ascii :hexlast)>64 [make "hexlast (ascii :hexlast)-55]]
+op :hexfirst*16+:hexlast
+end
+to hair.base.index :v :list
+repeat count :list [
+    if :v = item repcount :list [op repcount]
+]
+op 0
+end
+to hair.base.makem :v
+make :v 1+thing :v
+end
+to hair.base.makep :v
+make :v -1+thing :v
+end
+to hair.base.max :list
+if :hair_fallback_os = "ucblogo [
+    output reduce [ifelse ?1 > ?2 [?1] [?2]] :list
+]
+if :hair_fallback_os = "lhogho [(throw "error [hair.base.max do not supported on your platform.])]
+op last sort :list
+end
+to hair.base.min :list
+if :hair_fallback_os = "ucblogo [
+    output reduce [ifelse ?1 < ?2 [?1] [?2]] :list
+]
+if :hair_fallback_os = "lhogho [(throw "error [hair.base.min do not supported on your platform.])]
+op first sort :list
+end
+to hair.base.random :s :e
+if not :hair_fallback_os = "ucblogo [(rerandom hair.base.timemilli)]
+local "sew
+ifelse (hair.base.random.repeat :s) > hair.base.random.repeat :e [make "sew hair.base.random.repeat :s] [make "sew hair.base.random.repeat :e]
+if :sew = 0 [op :s + random (:e - :s)]
+op :s + (random round :e*:sew-:s*:sew)/:sew
+end
+to hair.base.random.repeat :n
+if empty? :n [op 0]
+if ". = first :n [op power 10 count bf :n]
+op hair.base.random.repeat bf :n
+end
+to hair.base.token :l
+if not :hair_fallback_os = "ucblogo [(rerandom hair.base.timemilli)]
+local "tokenlist
+make "tokenlist []
+local "tokenlist2 
+make "tokenlist2 "
+repeat :l [make "tokenlist se :tokenlist random 36]
+repeat count :tokenlist [
+  ifelse (item repcount :tokenlist) > 9 [make "tokenlist2 word :tokenlist2 char 97+(item repcount :tokenlist)-10][make "tokenlist2 word :tokenlist2 (item repcount :tokenlist)]
+]
+op :tokenlist2
+end
+to hair.base.safefirst :x
+if empty? :x [
+  ifelse word? :x [op "] [op []]
+]
+op first :x
+end
+to hair.base.safelast :x
+if empty? :x [
+  ifelse word? :x [op "] [op []]
+]
+op last :x
+end
+to hair.base.settitle :title
+if :hair_fallback_os = "ucblogo [(throw "error [hair.base.settitle do not supported on your platform.])]
+if :hair_fallback_os = "lhogho [(throw "error [hair.base.settitle do not supported on your platform.])]
+dllload "user32.dll
+local "result
+make "result dllcall (list "L "SetWindowTextA "S :title "L :hair_hwnd)
+dllfree 
+end
+to hair.old.array :x :m
+(local "_ns "_nw)
+make "_ns 1
+make "_nw []
+repeat count :x [make "_ns :_ns*item repcount :x]
+ifelse equal? "r hair.base.safefirst :m [(rerandom hair.base.timemilli) repeat :_ns [make "_nw fput random bf :m :_nw]] [repeat :_ns [make "_nw fput :m :_nw]]
+make "_nw fput bf :x reverse :_nw
+op :_nw
+end
+to hair.old.arrayid :x :l
+(local "_head "_kkk "_headc)
+make "_head first :x
+make "x bf :x
+make "_kkk 0
+make "_headc count :_head
+repeat :_headc [make "_kkk :_kkk+hair.old.arrayid.repeat first :l :_head make "l bf :l make "_head bf :_head]
+make "_kkk :_kkk+(last :l)+1
+op :_kkk
+end
+to hair.old.arrayid.repeat :fl :he
+if empty? :he [op :fl]
+op product first :he hair.old.arrayid.repeat :fl bf :he
+end
+to hair.old.aget :x :l
+op item hair.old.arrayid :x :l bf :x
+end
+to hair.old.aset :x :l :v
+local "wat
+if not list? :x [make "x thing :x]
+make "wat hair.old.arrayid :x :l
+op (se (hair.base.getitem :wat :x) (list :v) (hair.base.delitem :wat+1 :x))
+end
+to hair.file.extension :e
+if :hair_fallback_os = "ucblogo [(throw "error [hair.file.extension do not supported on your platform.])]
+if :hair_fallback_os = "lhogho [op hair.file.extension.repeat files ". [] :e]
+op hair.file.extension.repeat files [] :e 1
+end
+to hair.file.extension.repeat :curfile :curfile2 :e
+if empty? :curfile [op :curfile2]
+local "exfile
+make "exfile first :curfile
+if (count :exfile)>(count :e)+1 [
+  if :e = hair.base.delitem (count :exfile)-(count :e) :exfile [
+    make "curfile2 se :curfile2 :exfile
+  ]
+]
+op hair.file.extension.repeat bf :curfile :curfile2 :e
+end

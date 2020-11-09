@@ -1,0 +1,139 @@
+load "Hair.lgo
+load "cl.lgo
+
+;初始化权重矩阵
+make "weights rseq (0 - power 11760 -0.5) (power 11760 -0.5) 10000
+make "a []
+repeat 11760 [make "a fput pick :weights :a] ;784*15=11760
+make "w1 listtoblock :a [11760 f4] 
+make "bufferW1 listtoblock [0] [p4]
+hair.cl.buffer :bufferW1 :w1 1 11760
+
+make "weights rseq (0 - power 150 -0.5) (power 150 -0.5) 10000
+make "a []
+repeat 150 [make "a fput pick :weights :a] ;15*10=150
+make "w2 listtoblock :a [150 f4] 
+make "bufferW2 listtoblock [0] [p4]
+hair.cl.buffer :bufferW2 :w2 1 150
+
+;初始化偏置矩阵
+make "a []
+repeat 15*100 [make "a fput 0 :a]
+make "b1 listtoblock :a [1500 f4] 
+make "bufferB1 listtoblock [0] [p4]
+hair.cl.buffer :bufferB1 :b1 1 15*100
+
+make "a []
+repeat 10*100 [make "a fput 0 :a]
+make "b2 listtoblock :a [1000 f4] 
+make "bufferB2 listtoblock [0] [p4]
+hair.cl.buffer :bufferB2 :b2 1 10*100
+
+;初始化一些重复使用的变量，尝试减小内存占用
+make "b []
+
+make "a []
+repeat 100*784 [make "a fput 0 :a]
+make "buf1 listtoblock :a [78400 f4] ;100*784
+make "bufferSam listtoblock [0] [p4]
+
+make "a []
+repeat 100*10 [make "a fput 0 :a]
+make "buf2 listtoblock :a [1000 f4] ;100*10
+make "bufferLab listtoblock [0] [p4]
+
+make "a []
+repeat 100*15 [make "a fput 0 :a]
+make "buf3 listtoblock :a [1500 f4] 
+make "bufferB1G listtoblock [0] [p4]
+make "bufferB1GG listtoblock [0] [p4]
+hair.cl.buffer :bufferB1G :buf3 1 1500
+hair.cl.buffer :bufferB1GG :buf3 1 1500
+
+make "bufferB2G listtoblock [0] [p4]
+hair.cl.buffer :bufferB2G :buf2 1 1000
+
+make "a []
+repeat 15*10 [make "a fput 0 :a]
+make "bufferW2G listtoblock [0] [p4]
+hair.cl.buffer :bufferW2G :a 1 150
+
+to mnist :n
+if :n<1 [stop]
+type  "#
+;从文件读取mnist数据，创建一个batch大小为100*784的样本矩阵和100*10的标签矩阵
+make "a []
+make "b []
+make "i 1
+do.while [
+make "_a readlist
+make "a se bl :_a :a
+make "_b last :_a
+repeat 9-:_b [make "b fput 0 :b]
+make "b fput 1 :b
+repeat :_b [make "b fput 0 :b]
+make "i :i+1
+] [:i<101]
+listintoblock :a :buf1 [78400 f4]
+listintoblock :b :buf2 [1000 f4]
+hair.cl.buffer :bufferSam :buf1 1 78400
+hair.cl.buffer :bufferLab :buf2 1 1000
+;矩阵做归一化
+hair.cl.scal :bufferSam 1/255 100*784
+;前向传播
+hair.cl.copy :bufferB1 :bufferB1G 100*15
+hair.cl.copy :bufferB2 :bufferB2G 100*10
+hair.cl.matmul :bufferSam :bufferW1 :bufferB1G 1 1 100 15 784
+hair.cl.sigmoid :bufferB1G 100*15
+hair.cl.matmul :bufferB1G :bufferW2 :bufferB2G 1 1 100 10 15
+hair.cl.sigmoid :bufferB2G 100*10
+;反向传播
+hair.cl.vecadd :bufferB2G :bufferLab -1 100*10
+hair.cl.sigmoid.d :bufferB2G 100*10
+
+
+
+hair.cl.vecdot :bufferLab :bufferB2G -0.8/100 100*10
+hair.cl._back :bufferB2 :bufferB2G 1 100 10
+hair.cl.copy :bufferW2 :bufferW2G 15*10
+ignore hair.cl.matmult1 :bufferB1G :bufferB2G :bufferW2 -1 1 15 10 100
+hair.cl.matmult2 :bufferB2G :bufferW2G :bufferB1GG 1 0 100 15 10
+hair.cl.sigmoid.d :bufferB1G 100*15
+hair.cl.vecdot :bufferB1GG :bufferB1G 1 100*15
+hair.cl._back :bufferB1 :bufferB1G 1 100 15
+
+;hair.cl.readbuffer :bufferSam :buf1 784*100
+;pr hair.base.delitem 990 blocktolist :buf1 [1000 f4]
+ignore hair.cl.matmult1 :bufferSam :bufferB1G :bufferW1 -100 1 784 15 100
+;hair.cl.readbuffer :bufferW1 :buf1 784*15
+;pr hair.base.delitem 990 blocktolist :buf1 [1000 f4]
+
+mnist :n-1
+end
+
+to acc :n
+make "a []
+make "b []
+make "i 1
+do.while [make "_a readlist make "a se bl :_a :a make "b fput last :_a :b make "i :i+1] [:i<101]
+listintoblock :a :buf1 [78400 f4]
+hair.cl.buffer :bufferSam :buf1 1 78400
+hair.cl.scal :bufferSam 1/255 100*784
+hair.cl.copy :bufferB1 :bufferB1G 100*15
+hair.cl.copy :bufferB2 :bufferB2G 100*10
+hair.cl.matmul :bufferSam :bufferW1 :bufferB1G 1 1 100 15 784
+hair.cl.sigmoid :bufferB1G 100*15
+hair.cl.matmul :bufferB1G :bufferW2 :bufferB2G 1 1 100 10 15
+hair.cl.sigmoid :bufferB2G 100*10
+
+hair.cl.readbuffer :bufferB2G :buf2 100*10
+make "a blocktolist :buf2 [1000 f4]
+repeat 100 [make "q 0 make "_q 0 repeat 10 [if :_q<first :a [make "_q first :a make "q repcount-1 make "a bf :a]] if :q=first :b [make "n :n+1] make "b bf :b]
+(pr "acurracy: :n "%)
+end
+
+openread "mnist.htab
+openread "mnist_test.htab
+setread "mnist_test.htab
+type "baseline\  acc 0
+repeat 20 [make "t hair.base.timemilli type word "epoch repcount type ":\[ setread "mnist.htab setreadpos 0 mnist 50 type "\] (pr "\ timecost: hair.base.timemilli-:t "ms) setread "mnist_test.htab setreadpos 0 acc 0]
